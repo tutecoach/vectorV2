@@ -26,13 +26,18 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await login(email, password);
-    if (result.success) {
-      navigate("/dashboard", { replace: true });
-    } else {
-      setError(result.error || "Credenciales incorrectas.");
+    try {
+      const result = await login(email, password);
+      if (result.success) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        setError(result.error || "Credenciales incorrectas.");
+      }
+    } catch {
+      setError("Error de conexión. Intente nuevamente.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -40,14 +45,19 @@ const Login = () => {
     setError("");
     setSuccess("");
     setLoading(true);
-    const result = await signup(email, password, name);
-    if (result.success) {
-      setSuccess("Cuenta creada. Revise su email para confirmar el registro.");
-      setView("login");
-    } else {
-      setError(result.error || "Error al crear la cuenta.");
+    try {
+      const result = await signup(email, password, name);
+      if (result.success) {
+        setSuccess("Cuenta creada. Revise su email para confirmar el registro.");
+        setView("login");
+      } else {
+        setError(result.error || "Error al crear la cuenta.");
+      }
+    } catch {
+      setError("Error de conexión. Intente nuevamente.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleForgot = async (e: React.FormEvent) => {
@@ -55,13 +65,18 @@ const Login = () => {
     setError("");
     setSuccess("");
     setLoading(true);
-    const result = await resetPassword(email);
-    if (result.success) {
-      setSuccess("Se envió un link de recuperación a su email.");
-    } else {
-      setError(result.error || "Error al enviar el link.");
+    try {
+      const result = await resetPassword(email);
+      if (result.success) {
+        setSuccess("Se envió un link de recuperación a su email.");
+      } else {
+        setError(result.error || "Error al enviar el link.");
+      }
+    } catch {
+      setError("Error de conexión. Intente nuevamente.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const switchView = (v: View) => {
