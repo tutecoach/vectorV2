@@ -1,0 +1,56 @@
+# Plan de Implementación: Funcionalidad "+ Nueva OT"
+
+## Descripción del Objetivo
+El objetivo es volver completamente funcional el botón verde "+ Nueva OT" en el módulo de Planificación ([PlanningPage.tsx](file:///c:/Users/n_e_o/IA%20Solutions%20Factory/vector-matias/src/pages/dashboard/PlanningPage.tsx)). Actualmente, este módulo utiliza datos estáticos (mocks). Para que la creación de la OT sea funcional y visible, implementaremos el ciclo completo: Formulario UI, validación, inserción en Supabase, y lectura de los datos reales para actualizar la tabla.
+
+## Cambios Propuestos
+
+### Nuevos Hooks de Datos (React Query)
+Crearemos un nuevo archivo para encapsular la lógica de datos de planificación.
+
+#### [NEW] `src/hooks/usePlanning.ts`
+Implementar los siguientes custom hooks usando `@tanstack/react-query` y `supabase`:
+- `useWorkOrders()`: Para obtener la lista de OTs (`work_orders`) unidas con los datos del cliente y técnico (opcional).
+- `useCreateWorkOrder()`: Mutación para insertar una nueva orden en `work_orders`.
+- `useTechnicians()`: Para obtener los perfiles que pueden ser asignados (leyendo de `profiles` o mock por ahora si no hay roles de técnico bien definidos, pero trataremos de leer de la DB).
+
+### Componente de Formulario (UI)
+Crearemos el modal/diálogo que se abre al hacer clic en el botón.
+
+#### [NEW] `src/components/planning/NewWorkOrderDialog.tsx`
+- Componente basado en `Dialog` de shadcn/ui.
+- Formulario construido con `react-hook-form` y validado con `zod`.
+- **Campos:**
+  - Cliente (Select, usando el hook existente [useClients](file:///c:/Users/n_e_o/IA%20Solutions%20Factory/vector-matias/src/hooks/useCRM.ts#9-22))
+  - Sede (Select, usando [useClientSites](file:///c:/Users/n_e_o/IA%20Solutions%20Factory/vector-matias/src/hooks/useCRM.ts#23-39) basado en el cliente seleccionado)
+  - Técnico (Select)
+  - Fecha Programada (`scheduled_date` - Input tipo Date)
+  - Estado (Select por defecto en "pendiente")
+  - Notas (Textarea)
+- Integración con la mutación `useCreateWorkOrder` y control de estado de carga/éxito (Toasts).
+
+### Actualización de la Vista de Planificación
+Reemplazaremos los datos duros por los datos provenientes de la base de datos.
+
+#### [MODIFY] [src/pages/dashboard/PlanningPage.tsx](file:///c:/Users/n_e_o/IA%20Solutions%20Factory/vector-matias/src/pages/dashboard/PlanningPage.tsx)
+- Importar y renderizar `<NewWorkOrderDialog />`, conectándolo al botón "+ Nueva OT" (mediante un estado local `isOpen` o pasándolo como `trigger` del Dialog).
+- Reemplazar el array estático `orders` por el resultado del hook `useWorkOrders()`.
+- Mapear las filas de la tabla de OTs para que rendericen los datos reales que vienen de Supabase.
+
+---
+
+## Plan de Verificación
+
+### Verificación Manual (Recreando el Flujo E2E)
+1. Iniciar sesión en el portal (`npm run dev`).
+2. Navegar al módulo de Planificación.
+3. Observar que la tabla cargue (estará vacía si no hay registros o mostrará los reales insertados previamente).
+4. Hacer clic en "+ Nueva OT". Se debe abrir el modal con el formulario.
+5. Dejar el formulario vacío y hacer clic en "Guardar". Verificar que la validación de Zod funcione y muestre errores en los campos obligatorios.
+6. Llenar el formulario con datos válidos (seleccionar un cliente existente, fecha, técnico, etc.).
+7. Enviar el formulario. Observar el spinner de carga y el Toast de confirmación de éxito.
+8. El modal debe cerrarse automáticamente tras el éxito.
+9. **Verificación crítica:** La nueva Orden de Trabajo debe aparecer instantáneamente en la tabla de la vista de Planificación, reflejando el correcto funcionamiento de la conexión con Supabase.
+
+> [!NOTE]
+> Requiere de la aprobación del usuario para proceder a la fase de **EXECUTION** y escribir el código.

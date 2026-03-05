@@ -7,14 +7,9 @@ import {
   Route, Truck, Wrench, Shield, Fuel, Navigation,
 } from "lucide-react";
 
-const orders = [
-  { id: "OT-2026-0451", client: "Alimentos del Sur S.A.", site: "Planta Principal", date: "2026-02-25", tech: "Carlos M.", status: "En curso", time: "08:00" },
-  { id: "OT-2026-0452", client: "Hotel Pacífico", site: "Sede Central", date: "2026-02-25", tech: "Ana R.", status: "Pendiente", time: "09:30" },
-  { id: "OT-2026-0453", client: "Supermercado La Unión", site: "Sucursal Norte", date: "2026-02-25", tech: "Luis P.", status: "Pendiente", time: "11:00" },
-  { id: "OT-2026-0454", client: "Frigorífico Norte", site: "Planta Procesadora", date: "2026-02-25", tech: "Carlos M.", status: "Programado", time: "14:00" },
-  { id: "OT-2026-0455", client: "Restaurant El Roble", site: "Local Principal", date: "2026-02-25", tech: "María G.", status: "Completado", time: "15:30" },
-  { id: "OT-2026-0456", client: "Clínica Salud+", site: "Edificio A", date: "2026-02-26", tech: "Ana R.", status: "Cancelado", time: "08:00" },
-];
+import { useWorkOrders } from "@/hooks/usePlanning";
+import NewWorkOrderDialog from "@/components/planning/NewWorkOrderDialog";
+import { format } from "date-fns";
 
 const technicians = [
   { name: "Carlos Méndez", role: "Técnico Senior", status: "En campo", orders: 3, zone: "Zona Norte", certs: ["HACCP", "ISO 9001"], vehicle: "VH-001" },
@@ -31,6 +26,8 @@ const fleet = [
 ];
 
 export default function PlanningPage() {
+  const { data: realOrders, isLoading: loadingOrders } = useWorkOrders();
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="orders">
@@ -42,9 +39,7 @@ export default function PlanningPage() {
             <TabsTrigger value="technicians" className="font-heading text-sm">Técnicos</TabsTrigger>
             <TabsTrigger value="fleet" className="font-heading text-sm">Flota</TabsTrigger>
           </TabsList>
-          <Button size="sm" className="bg-primary font-heading text-sm">
-            <Plus className="h-4 w-4 mr-1" /> Nueva OT
-          </Button>
+          <NewWorkOrderDialog />
         </div>
 
         {/* OT Table */}
@@ -63,21 +58,32 @@ export default function PlanningPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((o) => (
+                  {loadingOrders ? (
+                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Cargando órdenes...</td></tr>
+                  ) : (!realOrders || realOrders.length === 0) ? (
+                    <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No hay órdenes de trabajo registradas.</td></tr>
+                  ) : realOrders.map((o) => (
                     <tr key={o.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer">
-                      <td className="py-3 px-4 font-medium text-secondary">{o.id}</td>
-                      <td className="py-3 px-4 text-foreground">{o.client}</td>
-                      <td className="py-3 px-4 text-muted-foreground text-xs hidden md:table-cell">{o.site}</td>
-                      <td className="py-3 px-4 text-muted-foreground text-xs hidden lg:table-cell flex items-center gap-1"><Clock className="h-3 w-3 inline" /> {o.date} {o.time}</td>
-                      <td className="py-3 px-4 text-muted-foreground">{o.tech}</td>
+                      <td className="py-3 px-4 font-medium text-secondary">{o.id.split("-").pop() || o.id}</td>
+                      <td className="py-3 px-4 text-foreground">{o.client?.name || "Sin cliente"}</td>
+                      <td className="py-3 px-4 text-muted-foreground text-xs hidden md:table-cell">{o.site?.name || "Sin sede"}</td>
+                      <td className="py-3 px-4 text-muted-foreground text-xs hidden lg:table-cell flex items-center gap-1">
+                        <Clock className="h-3 w-3 inline" />
+                        {o.scheduled_date ? format(new Date(o.scheduled_date), "dd/MM/yyyy") : "Sin fecha"}
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground">{o.technician?.name || "Sin asignar"}</td>
                       <td className="py-3 px-4">
-                        <Badge className={`text-[10px] ${
-                          o.status === "En curso" ? "bg-primary/10 text-primary border-0" :
-                          o.status === "Pendiente" ? "bg-secondary/10 text-secondary border-0" :
-                          o.status === "Completado" ? "bg-primary/10 text-primary border-0" :
-                          o.status === "Cancelado" ? "bg-destructive/10 text-destructive border-0" :
-                          "bg-muted text-muted-foreground border-0"
-                        }`}>{o.status}</Badge>
+                        <Badge className={`text-[10px] ${o.status === "en_progreso" ? "bg-primary/10 text-primary border-0" :
+                            o.status === "pendiente" ? "bg-secondary/10 text-secondary border-0" :
+                              o.status === "completada" ? "bg-primary/10 text-primary border-0" :
+                                o.status === "cancelada" ? "bg-destructive/10 text-destructive border-0" :
+                                  "bg-muted text-muted-foreground border-0"
+                          }`}>{
+                            o.status === "en_progreso" ? "En curso" :
+                              o.status === "pendiente" ? "Pendiente" :
+                                o.status === "completada" ? "Completado" :
+                                  o.status === "cancelada" ? "Cancelado" : o.status
+                          }</Badge>
                       </td>
                     </tr>
                   ))}
