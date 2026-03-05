@@ -66,3 +66,44 @@ export function useTechnicians() {
         },
     });
 }
+
+// Hook para obtener la carga de trabajo de cada técnico
+export function useTechnicianWorkload() {
+    return useQuery({
+        queryKey: ["technician_workload"],
+        queryFn: async () => {
+            // First get the technicians
+            const { data: profiles, error: profilesErr } = await supabase
+                .from("profiles")
+                .select("id, user_id, name");
+
+            if (profilesErr) throw profilesErr;
+
+            // Then get the active work orders (pendiente, en_progreso)
+            const { data: wos, error: wosErr } = await supabase
+                .from("work_orders")
+                .select("technician_id, status")
+                .in("status", ["pendiente", "en_progreso"]);
+
+            if (wosErr) throw wosErr;
+
+            // Finally, map each technician to their workload and a mock role/status
+            return profiles.map(profile => {
+                const activeOrders = wos.filter(wo => wo.technician_id === profile.user_id);
+                // Simple logic to set status based on orders
+                const status = activeOrders.length > 0 ? "En campo" : "Disponible";
+
+                return {
+                    id: profile.user_id,
+                    name: profile.name,
+                    role: "Técnico", // You can expand this by joining user_roles if needed
+                    status: status,
+                    orders: activeOrders.length,
+                    zone: "Zona Asignada", // Hardcoded for now as zone logic isn't fully defined
+                    certs: ["HACCP"], // Hardcoded for now
+                    vehicle: "VH-" + profile.id.substring(0, 3).toUpperCase() // Mock vehicle ID
+                };
+            });
+        },
+    });
+}

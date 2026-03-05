@@ -7,16 +7,9 @@ import {
   Route, Truck, Wrench, Shield, Fuel, Navigation,
 } from "lucide-react";
 
-import { useWorkOrders } from "@/hooks/usePlanning";
+import { useWorkOrders, useTechnicianWorkload } from "@/hooks/usePlanning";
 import NewWorkOrderDialog from "@/components/planning/NewWorkOrderDialog";
 import { format } from "date-fns";
-
-const technicians = [
-  { name: "Carlos Méndez", role: "Técnico Senior", status: "En campo", orders: 3, zone: "Zona Norte", certs: ["HACCP", "ISO 9001"], vehicle: "VH-001" },
-  { name: "Ana Ríos", role: "Técnico", status: "Disponible", orders: 1, zone: "Zona Centro", certs: ["HACCP"], vehicle: "VH-002" },
-  { name: "Luis Paredes", role: "Técnico Senior", status: "En campo", orders: 2, zone: "Zona Sur", certs: ["HACCP", "BRC"], vehicle: "VH-003" },
-  { name: "María García", role: "Técnico Junior", status: "En tránsito", orders: 2, zone: "Zona Oeste", certs: ["HACCP"], vehicle: "VH-004" },
-];
 
 const fleet = [
   { id: "VH-001", type: "Kangoo", tech: "Carlos M.", fuel: "78%", nextService: "2026-03-15", vtv: "Vigente", insurance: "Vigente" },
@@ -27,6 +20,10 @@ const fleet = [
 
 export default function PlanningPage() {
   const { data: realOrders, isLoading: loadingOrders } = useWorkOrders();
+  const { data: realTechnicians, isLoading: loadingTechs } = useTechnicianWorkload();
+
+  // Safe default
+  const technicians = realTechnicians || [];
 
   return (
     <div className="space-y-6">
@@ -74,10 +71,10 @@ export default function PlanningPage() {
                       <td className="py-3 px-4 text-muted-foreground">{o.technician?.name || "Sin asignar"}</td>
                       <td className="py-3 px-4">
                         <Badge className={`text-[10px] ${o.status === "en_progreso" ? "bg-primary/10 text-primary border-0" :
-                            o.status === "pendiente" ? "bg-secondary/10 text-secondary border-0" :
-                              o.status === "completada" ? "bg-primary/10 text-primary border-0" :
-                                o.status === "cancelada" ? "bg-destructive/10 text-destructive border-0" :
-                                  "bg-muted text-muted-foreground border-0"
+                          o.status === "pendiente" ? "bg-secondary/10 text-secondary border-0" :
+                            o.status === "completada" ? "bg-primary/10 text-primary border-0" :
+                              o.status === "cancelada" ? "bg-destructive/10 text-destructive border-0" :
+                                "bg-muted text-muted-foreground border-0"
                           }`}>{
                             o.status === "en_progreso" ? "En curso" :
                               o.status === "pendiente" ? "Pendiente" :
@@ -135,8 +132,12 @@ export default function PlanningPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground font-body">Rutas optimizadas considerando tráfico, habilidades del técnico y ventanas horarias del cliente.</p>
-              {technicians.filter(t => t.status !== "Disponible").map((tech, i) => (
-                <div key={i} className="p-4 rounded-lg border border-border bg-muted/20">
+              {loadingTechs ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">Cargando rutas de técnicos...</div>
+              ) : technicians.length === 0 ? (
+                <div className="py-8 text-center text-muted-foreground text-sm">No hay técnicos con rutas asignadas.</div>
+              ) : technicians.filter(t => t.status !== "Disponible").map((tech, i) => (
+                <div key={tech.id} className="p-4 rounded-lg border border-border bg-muted/20">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Navigation className="h-4 w-4 text-secondary" />
@@ -162,34 +163,40 @@ export default function PlanningPage() {
 
         {/* Técnicos */}
         <TabsContent value="technicians">
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {technicians.map((t) => (
-              <Card key={t.name} className="border border-border">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-primary" />
+          {loadingTechs ? (
+            <div className="py-8 text-center text-muted-foreground">Cargando técnicos y carga laboral...</div>
+          ) : technicians.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground">No hay técnicos registrados.</div>
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {technicians.map((t) => (
+                <Card key={t.id} className="border border-border">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Users className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="font-heading font-semibold text-sm">{t.name}</p>
+                        <p className="text-xs text-muted-foreground">{t.role}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-heading font-semibold text-sm">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.role}</p>
+                    <div className="space-y-2 text-sm font-body">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Estado</span>
+                        <Badge className={`text-[10px] ${t.status === "En campo" ? "bg-primary/10 text-primary border-0" : t.status === "Disponible" ? "bg-secondary/10 text-secondary border-0" : "bg-muted text-muted-foreground border-0"}`}>{t.status}</Badge>
+                      </div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">OTs hoy</span><span className="font-medium">{t.orders}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">Zona</span><span className="text-xs flex items-center gap-1"><MapPin className="h-3 w-3" />{t.zone}</span></div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {t.certs.map(c => <Badge key={c} variant="outline" className="text-[9px]"><Shield className="h-2 w-2 mr-0.5" />{c}</Badge>)}
+                      </div>
                     </div>
-                  </div>
-                  <div className="space-y-2 text-sm font-body">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Estado</span>
-                      <Badge className={`text-[10px] ${t.status === "En campo" ? "bg-primary/10 text-primary border-0" : t.status === "Disponible" ? "bg-secondary/10 text-secondary border-0" : "bg-muted text-muted-foreground border-0"}`}>{t.status}</Badge>
-                    </div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">OTs hoy</span><span className="font-medium">{t.orders}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Zona</span><span className="text-xs flex items-center gap-1"><MapPin className="h-3 w-3" />{t.zone}</span></div>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {t.certs.map(c => <Badge key={c} variant="outline" className="text-[9px]"><Shield className="h-2 w-2 mr-0.5" />{c}</Badge>)}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* Flota */}
