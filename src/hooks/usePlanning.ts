@@ -50,17 +50,19 @@ export function useTechnicians() {
     return useQuery({
         queryKey: ["technicians"],
         queryFn: async () => {
-            // Intentamos recuperar usuarios con rol 'tecnico' (o similar) de la DB
+            // Fetch all profiles to ensure we have data. For a real app,
+            // we'd filter either by joining or doing a 2-step query.
             const { data, error } = await supabase
-                .from("user_roles")
-                .select(`
-          role,
-          profiles(id, name)
-        `)
-            // .eq("role", "tecnico");  // Si solo hay admin en la db, mostraremos todos por ahora para evitar tabla vacía
+                .from("profiles")
+                .select("id, user_id, name");
 
             if (error) throw error;
-            return data.flatMap(d => d.profiles).filter(Boolean);
+            // The foreign key on work_orders expects technician_id to match profiles.user_id
+            return data.map(profile => ({
+                id: profile.user_id, // Map user_id to id for the UI Select component
+                name: profile.name,
+                original_id: profile.id
+            }));
         },
     });
 }

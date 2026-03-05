@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useToast } from "@/hooks/use-toast";
-import { useClients, useClientSites } from "@/hooks/useCRM";
+import { useClients, useClientSites, useCreateSite } from "@/hooks/useCRM";
 import { useCreateWorkOrder, useTechnicians } from "@/hooks/usePlanning";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -47,11 +47,14 @@ type FormValues = z.infer<typeof formSchema>;
 
 export default function NewWorkOrderDialog() {
     const [open, setOpen] = useState(false);
+    const [isAddingSite, setIsAddingSite] = useState(false);
+    const [newSiteName, setNewSiteName] = useState("");
     const { toast } = useToast();
 
     const { data: clients, isLoading: loadingClients } = useClients();
     const { data: technicians, isLoading: loadingTechs } = useTechnicians();
     const createWorkOrder = useCreateWorkOrder();
+    const createSite = useCreateSite();
 
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
@@ -72,18 +75,43 @@ export default function NewWorkOrderDialog() {
     // Resetear sitio si cambia de cliente
     useEffect(() => {
         form.setValue("site_id", "");
+        setIsAddingSite(false);
+        setNewSiteName("");
     }, [selectedClientId, form]);
+
+    const handleCreateSite = async () => {
+        if (!newSiteName.trim() || !selectedClientId) return;
+        try {
+            const newSite = await createSite.mutateAsync({
+                client_id: selectedClientId,
+                name: newSiteName.trim()
+            });
+            form.setValue("site_id", newSite.id);
+            setIsAddingSite(false);
+            setNewSiteName("");
+            toast({
+                title: "Sede creada",
+                description: "La nueva sede/zona ha sido agregada con éxito.",
+            });
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "No se pudo crear la sede.",
+            });
+        }
+    };
 
     const onSubmit = async (values: FormValues) => {
         try {
             await createWorkOrder.mutateAsync({
                 client_id: values.client_id,
-                site_id: values.site_id,
+                site_id: values.site_id || null,
                 technician_id: values.technician_id || null,
                 scheduled_date: values.scheduled_date || null,
                 flexible_schedule: values.flexible_schedule,
                 status: values.status,
-                notes: values.notes,
+                notes: values.notes || null,
             });
 
             toast({
@@ -93,11 +121,12 @@ export default function NewWorkOrderDialog() {
 
             form.reset();
             setOpen(false);
-        } catch (error) {
+        } catch (error: any) {
+            console.error("Error creating Work Order:", error);
             toast({
                 variant: "destructive",
                 title: "Error al crear OT",
-                description: "Ha ocurrido un error inesperado al guardar la orden.",
+                description: error?.message || "Ha ocurrido un error inesperado al guardar la orden.",
             });
         }
     };
@@ -148,21 +177,49 @@ export default function NewWorkOrderDialog() {
                             name="site_id"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Sede / Locación</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClientId || loadingSites}>
-                                        <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Seleccionar sede" />
-                                            </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            {sites?.map((s) => (
-                                                <SelectItem key={s.id} value={s.id}>
-                                                    {s.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <FormLabel>Sede / Zona</FormLabel>
+                                    {!isAddingSite ? (
+                                        <div className="flex gap-2">
+                                            <Select onValueChange={field.onChange} value={field.value} disabled={!selectedClientId || loadingSites}>
+                                                <FormControl>
+                                                    <SelectTrigger className="flex-1">
+                                                        <SelectValue placeholder="Seleccionar sede o zona" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    {sites?.map((s) => (
+                                                        <SelectItem key={s.id} value={s.id}>
+                                                            {s.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <Button type="button" variant="outline" size="icon" disabled={!selectedClientId} onClick={() => setIsAddingSite(true)} title="Agregar Sede/Zona">
+                                                <Plus className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex gap-2">
+                                            <Input
+                                                autoFocus
+                                                placeholder="Nombre de la nueva sede o zona"
+                                                value={newSiteName}
+                                                onChange={(e) => setNewSiteName(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleCreateSite();
+                                                    }
+                                                }}
+                                            />
+                                            <Button type="button" onClick={handleCreateSite} disabled={!newSiteName.trim() || createSite.isPending}>
+                                                Guardar
+                                            </Button>
+                                            <Button type="button" variant="ghost" onClick={() => setIsAddingSite(false)}>
+                                                Cancelar
+                                            </Button>
+                                        </div>
+                                    )}
                                     <FormMessage />
                                 </FormItem>
                             )}
