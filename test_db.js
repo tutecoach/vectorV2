@@ -1,47 +1,58 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY; // Corrected key name
-
-if (!supabaseUrl || !supabaseKey) {
-    console.error("Missing SUPABASE env vars.", { supabaseUrl, supabaseKey });
-    process.exit(1);
-}
+const supabaseUrl = 'https://dwwxeqvfutxffgkmyqsa.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR3d3hlcXZmdXR4ZmZna215cXNhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MjU0NDc3OSwiZXhwIjoyMDg4MTIwNzc5fQ.1zSACn6Mw5cNdQAZ7Pzlld4EpDdTENTdkPgzwb3Nl_4';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-async function test() {
-    console.log("Fetching profiles to get a valid technician_id...");
-    const { data: profiles, error: err1 } = await supabase.from('profiles').select('*').limit(5);
+async function seedTechnicians() {
+    console.log("Seeding mock technicians...");
 
-    if (err1) {
-        console.error("Error fetching profiles:", err1);
-        return;
+    const mockUsers = [
+        { id: '10000000-0000-0000-0000-000000000001', email: 'carlos.mendez@vector.com', name: 'Carlos Méndez' },
+        { id: '10000000-0000-0000-0000-000000000002', email: 'ana.rios@vector.com', name: 'Ana Ríos' },
+        { id: '10000000-0000-0000-0000-000000000003', email: 'luis.paredes@vector.com', name: 'Luis Paredes' },
+        { id: '10000000-0000-0000-0000-000000000004', email: 'maria.garcia@vector.com', name: 'María García' }
+    ];
+
+    for (const user of mockUsers) {
+        try {
+            console.log(`Creating user ${user.name}...`);
+            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+                email: user.email,
+                email_confirm: true,
+                password: 'Password123!',
+                user_metadata: { name: user.name }
+            });
+
+            if (authError) {
+                console.log(`Skipped or Error for auth.users ${user.email}:`, authError.message);
+            }
+
+            const userId = authData?.user?.id;
+
+            if (userId) {
+                console.log(`Creating profile and role for ${user.name} with ID ${userId}...`);
+
+                const { error: profileErr } = await supabase.from('profiles').upsert({
+                    user_id: userId,
+                    name: user.name
+                }, { onConflict: 'user_id' });
+
+                if (profileErr) console.error('Profile insert skip:', profileErr);
+
+                const { error: roleErr } = await supabase.from('user_roles').insert({
+                    user_id: userId,
+                    role: 'tecnico'
+                });
+
+                if (roleErr) console.error('Role insert skip:', roleErr);
+            }
+        } catch (err) {
+            console.error("Critical error inside loop:", err);
+        }
     }
-
-    console.log("Profiles found:", profiles?.length);
-
-    if (profiles && profiles.length > 0) {
-        const testTechId = profiles[0].id;
-        console.log("Testing insert into work_orders with technician_id =", testTechId);
-
-        // We will pass an invalid client_id just to see if the error is 
-        // work_orders_technician_id_fkey or work_orders_client_id_fkey.
-        // It validates constraints in a deterministic order or we can use a valid client_id if we fetch one.
-        const { data: clients } = await supabase.from('clients').select('id').limit(1);
-        const clientId = clients?.[0]?.id || '00000000-0000-0000-0000-000000000000';
-
-        const { data, error } = await supabase.from('work_orders').insert({
-            client_id: clientId,
-            site_id: null,
-            technician_id: testTechId,
-            status: 'pendiente',
-            flexible_schedule: false
-        });
-
-        console.log("Insert result error:", error);
-    } else {
-        console.log("No profiles found to test with.");
-    }
+    console.log("Seeding complete! You can now verify the planning tab.");
 }
-test();
+
+seedTechnicians().catch(e => console.error("Global error:", e));
