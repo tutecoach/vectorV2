@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +11,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Search, Plus, Building2, Phone, Mail, ChevronRight, MapPin,
   FileText, CreditCard, ClipboardList, Brain, Star, Users, Globe, Filter, Trash2, Edit,
@@ -31,14 +42,38 @@ const prospectStatusLabels: Record<string, string> = {
   convertido: "Convertido",
 };
 
+const clientSchema = z.object({
+  name: z.string().min(1, "El nombre / Razón Social es obligatorio"),
+  cuit: z.string().optional().nullable(),
+  email: z.string().email("Email inválido").or(z.literal("")).optional().nullable(),
+  phone: z.string().optional().nullable(),
+  contact_name: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  geo_lat: z.coerce.number().optional().nullable(),
+  geo_lng: z.coerce.number().optional().nullable(),
+  type: z.string().optional().nullable(),
+  zone: z.string().optional().nullable(),
+  plan: z.string().optional().nullable().default("Estándar"),
+  status: z.enum(["activo", "pendiente", "inactivo"]).default("activo"),
+});
+
+const prospectSchema = z.object({
+  phone: z.string().min(1, "El teléfono es obligatorio"),
+  name: z.string().optional().nullable(),
+  original_message: z.string().optional().nullable(),
+  source: z.string().default("whatsapp"),
+  marketing_tags: z.string().optional(),
+});
+
+type ClientFormValues = z.infer<typeof clientSchema>;
+type ProspectFormValues = z.infer<typeof prospectSchema>;
+
 export default function ClientsPage() {
   const [search, setSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [clientModalOpen, setClientModalOpen] = useState(false);
   const [prospectModalOpen, setProspectModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [clientForm, setClientForm] = useState<Partial<TablesInsert<"clients">>>({});
-  const [prospectForm, setProspectForm] = useState<Partial<TablesInsert<"prospects">>>({});
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
 
   const { data: clients = [], isLoading } = useClients();
@@ -51,35 +86,62 @@ export default function ClientsPage() {
 
   const filtered = clients.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
 
+  const clientForm = useForm<ClientFormValues>({
+    resolver: zodResolver(clientSchema),
+    defaultValues: {
+      name: "", cuit: "", email: "", phone: "", contact_name: "", address: "",
+      geo_lat: null, geo_lng: null, type: "", zone: "", plan: "Estándar", status: "activo"
+    }
+  });
+
+  const prospectForm = useForm<ProspectFormValues>({
+    resolver: zodResolver(prospectSchema),
+    defaultValues: {
+      phone: "", name: "", original_message: "", source: "whatsapp", marketing_tags: ""
+    }
+  });
+
   const openNewClient = () => {
     setEditingClient(null);
-    setClientForm({ status: "activo", plan: "Estándar" });
+    clientForm.reset({
+      name: "", cuit: "", email: "", phone: "", contact_name: "", address: "",
+      geo_lat: null, geo_lng: null, type: "", zone: "", plan: "Estándar", status: "activo"
+    });
     setClientModalOpen(true);
   };
 
   const openEditClient = (client: Client) => {
     setEditingClient(client);
-    setClientForm({ ...client });
+    clientForm.reset({
+      name: client.name,
+      cuit: client.cuit || "",
+      email: client.email || "",
+      phone: client.phone || "",
+      contact_name: client.contact_name || "",
+      address: client.address || "",
+      geo_lat: client.geo_lat || null,
+      geo_lng: client.geo_lng || null,
+      type: client.type || "",
+      zone: client.zone || "",
+      plan: client.plan || "Estándar",
+      status: client.status,
+    });
     setClientModalOpen(true);
   };
 
-  const handleSaveClient = async () => {
-    if (!clientForm.name?.trim()) {
-      toast.error("El nombre es obligatorio");
-      return;
-    }
+  const onClientSubmit = async (values: ClientFormValues) => {
     try {
       if (editingClient) {
-        await updateClient.mutateAsync({ id: editingClient.id, ...clientForm });
-        toast.success("Cliente actualizado");
+        await updateClient.mutateAsync({ id: editingClient.id, ...values } as any);
+        toast.success("Cliente actualizado exitosamente");
       } else {
-        const created = await createClient.mutateAsync(clientForm as TablesInsert<"clients">);
+        const created = await createClient.mutateAsync(values as any);
         setSelectedClient(created);
-        toast.success("Cliente creado");
+        toast.success("Cliente creado exitosamente");
       }
       setClientModalOpen(false);
     } catch (e: any) {
-      toast.error(e.message || "Error al guardar");
+      toast.error(e.message || "Error al guardar cliente");
     }
   };
 
@@ -92,34 +154,38 @@ export default function ClientsPage() {
     try {
       await deleteClient.mutateAsync(clientToDelete.id);
       if (selectedClient?.id === clientToDelete.id) setSelectedClient(null);
-      toast.success("Cliente eliminado");
+      toast.success("Cliente eliminado exitosamente");
     } catch (e: any) {
-      toast.error(e.message || "Error al eliminar");
+      toast.error(e.message || "Error al eliminar cliente");
     }
     setClientToDelete(null);
   };
 
   const openNewProspect = () => {
-    setProspectForm({ status: "nuevo", source: "whatsapp", marketing_tags: [] });
+    prospectForm.reset({ phone: "", name: "", original_message: "", source: "whatsapp", marketing_tags: "" });
     setProspectModalOpen(true);
   };
 
-  const handleSaveProspect = async () => {
-    if (!prospectForm.phone?.trim()) {
-      toast.error("El teléfono es obligatorio");
-      return;
-    }
+  const onProspectSubmit = async (values: ProspectFormValues) => {
     try {
-      await createProspect.mutateAsync(prospectForm as TablesInsert<"prospects">);
-      toast.success("Prospecto creado");
+      const tags = values.marketing_tags
+        ? values.marketing_tags.split(",").map(t => t.trim()).filter(Boolean)
+        : [];
+
+      await createProspect.mutateAsync({
+        phone: values.phone,
+        name: values.name || null,
+        original_message: values.original_message || null,
+        source: values.source,
+        marketing_tags: tags,
+        status: "nuevo"
+      });
+      toast.success("Prospecto creado exitosamente");
       setProspectModalOpen(false);
     } catch (e: any) {
-      toast.error(e.message || "Error al guardar");
+      toast.error(e.message || "Error al guardar prospecto");
     }
   };
-
-  const updateField = (key: string, value: any) => setClientForm((p) => ({ ...p, [key]: value }));
-  const updateProspectField = (key: string, value: any) => setProspectForm((p) => ({ ...p, [key]: value }));
 
   return (
     <div className="space-y-6">
@@ -323,84 +389,129 @@ export default function ClientsPage() {
           <DialogHeader>
             <DialogTitle className="font-heading">{editingClient ? "Editar Cliente" : "Nuevo Cliente"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-sm font-heading">Nombre / Razón Social *</Label>
-              <Input value={clientForm.name || ""} onChange={(e) => updateField("name", e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">CUIT</Label>
-                <Input value={clientForm.cuit || ""} onChange={(e) => updateField("cuit", e.target.value)} placeholder="20-12345678-9" />
+          <Form {...clientForm}>
+            <form onSubmit={clientForm.handleSubmit(onClientSubmit)} className="space-y-4">
+              <FormField control={clientForm.control} name="name" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre / Razón Social <span className="text-destructive">*</span></FormLabel>
+                  <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={clientForm.control} name="cuit" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CUIT</FormLabel>
+                    <FormControl><Input placeholder="20-12345678-9" {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={clientForm.control} name="email" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl><Input type="email" {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">Email</Label>
-                <Input type="email" value={clientForm.email || ""} onChange={(e) => updateField("email", e.target.value)} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={clientForm.control} name="phone" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Teléfono</FormLabel>
+                    <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={clientForm.control} name="contact_name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contacto</FormLabel>
+                    <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">Teléfono</Label>
-                <Input value={clientForm.phone || ""} onChange={(e) => updateField("phone", e.target.value)} />
+
+              <FormField control={clientForm.control} name="address" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Dirección</FormLabel>
+                  <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField control={clientForm.control} name="geo_lat" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Latitud</FormLabel>
+                    <FormControl><Input type="number" step="any" {...field} value={field.value ?? ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={clientForm.control} name="geo_lng" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Longitud</FormLabel>
+                    <FormControl><Input type="number" step="any" {...field} value={field.value ?? ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">Contacto</Label>
-                <Input value={clientForm.contact_name || ""} onChange={(e) => updateField("contact_name", e.target.value)} />
+
+              <div className="grid grid-cols-3 gap-4">
+                <FormField control={clientForm.control} name="type" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tipo</FormLabel>
+                    <FormControl><Input placeholder="Ej: Hotelería" {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={clientForm.control} name="zone" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Zona</FormLabel>
+                    <FormControl><Input placeholder="Ej: Zona Norte" {...field} value={field.value || ""} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={clientForm.control} name="plan" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plan</FormLabel>
+                    <Select value={field.value || "Estándar"} onValueChange={field.onChange}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="Básico">Básico</SelectItem>
+                        <SelectItem value="Estándar">Estándar</SelectItem>
+                        <SelectItem value="Premium">Premium</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-heading">Dirección</Label>
-              <Input value={clientForm.address || ""} onChange={(e) => updateField("address", e.target.value)} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">Latitud</Label>
-                <Input type="number" step="any" value={clientForm.geo_lat ?? ""} onChange={(e) => updateField("geo_lat", e.target.value ? parseFloat(e.target.value) : null)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">Longitud</Label>
-                <Input type="number" step="any" value={clientForm.geo_lng ?? ""} onChange={(e) => updateField("geo_lng", e.target.value ? parseFloat(e.target.value) : null)} />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">Tipo</Label>
-                <Input value={clientForm.type || ""} onChange={(e) => updateField("type", e.target.value)} placeholder="Ej: Hotelería" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">Zona</Label>
-                <Input value={clientForm.zone || ""} onChange={(e) => updateField("zone", e.target.value)} placeholder="Ej: Zona Norte" />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-sm font-heading">Plan</Label>
-                <Select value={clientForm.plan || "Estándar"} onValueChange={(v) => updateField("plan", v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Básico">Básico</SelectItem>
-                    <SelectItem value="Estándar">Estándar</SelectItem>
-                    <SelectItem value="Premium">Premium</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-heading">Estado</Label>
-              <Select value={clientForm.status || "activo"} onValueChange={(v) => updateField("status", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="activo">Activo</SelectItem>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="inactivo">Inactivo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClientModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveClient} disabled={createClient.isPending || updateClient.isPending}>
-              {createClient.isPending || updateClient.isPending ? "Guardando..." : "Guardar"}
-            </Button>
-          </DialogFooter>
+
+              <FormField control={clientForm.control} name="status" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Estado</FormLabel>
+                  <Select value={field.value || "activo"} onValueChange={field.onChange}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="activo">Activo</SelectItem>
+                      <SelectItem value="pendiente">Pendiente</SelectItem>
+                      <SelectItem value="inactivo">Inactivo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" onClick={() => setClientModalOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={createClient.isPending || updateClient.isPending}>
+                  {createClient.isPending || updateClient.isPending ? "Guardando..." : "Guardar"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 
@@ -410,46 +521,64 @@ export default function ClientsPage() {
           <DialogHeader>
             <DialogTitle className="font-heading">Nuevo Lead / Prospecto</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-sm font-heading">Teléfono WhatsApp *</Label>
-              <Input value={prospectForm.phone || ""} onChange={(e) => updateProspectField("phone", e.target.value)} placeholder="+54 9 264 5792222" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-heading">Nombre</Label>
-              <Input value={prospectForm.name || ""} onChange={(e) => updateProspectField("name", e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-heading">Mensaje Original</Label>
-              <Input value={prospectForm.original_message || ""} onChange={(e) => updateProspectField("original_message", e.target.value)} placeholder="Ej: Hola, tengo cucarachas..." />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-heading">Origen</Label>
-              <Select value={prospectForm.source || "whatsapp"} onValueChange={(v) => updateProspectField("source", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="telefono">Teléfono</SelectItem>
-                  <SelectItem value="web">Web</SelectItem>
-                  <SelectItem value="referido">Referido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-sm font-heading">Etiquetas (separar con coma)</Label>
-              <Input
-                value={(prospectForm.marketing_tags || []).join(", ")}
-                onChange={(e) => updateProspectField("marketing_tags", e.target.value.split(",").map((t) => t.trim()).filter(Boolean))}
-                placeholder="Ej: Cucaracha, Industria"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setProspectModalOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveProspect} disabled={createProspect.isPending}>
-              {createProspect.isPending ? "Guardando..." : "Guardar Lead"}
-            </Button>
-          </DialogFooter>
+          <Form {...prospectForm}>
+            <form onSubmit={prospectForm.handleSubmit(onProspectSubmit)} className="space-y-4">
+              <FormField control={prospectForm.control} name="phone" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Teléfono WhatsApp <span className="text-destructive">*</span></FormLabel>
+                  <FormControl><Input placeholder="+54 9 264 5792222" {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={prospectForm.control} name="name" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre</FormLabel>
+                  <FormControl><Input {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={prospectForm.control} name="original_message" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Mensaje Original</FormLabel>
+                  <FormControl><Input placeholder="Ej: Hola, tengo cucarachas..." {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={prospectForm.control} name="source" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Origen</FormLabel>
+                  <Select value={field.value || "whatsapp"} onValueChange={field.onChange}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                      <SelectItem value="telefono">Teléfono</SelectItem>
+                      <SelectItem value="web">Web</SelectItem>
+                      <SelectItem value="referido">Referido</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={prospectForm.control} name="marketing_tags" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Etiquetas (separar con coma)</FormLabel>
+                  <FormControl><Input placeholder="Ej: Cucaracha, Industria" {...field} value={field.value || ""} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="outline" onClick={() => setProspectModalOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={createProspect.isPending}>
+                  {createProspect.isPending ? "Guardando..." : "Guardar Lead"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 

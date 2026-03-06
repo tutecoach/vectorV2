@@ -7,9 +7,11 @@ import {
   Route, Truck, Wrench, Shield, Fuel, Navigation,
 } from "lucide-react";
 
-import { useWorkOrders, useTechnicianWorkload } from "@/hooks/usePlanning";
+import { useWorkOrders, useTechnicianWorkload, useUpdateWorkOrder } from "@/hooks/usePlanning";
 import NewWorkOrderDialog from "@/components/planning/NewWorkOrderDialog";
 import { format } from "date-fns";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 
 const fleet = [
   { id: "VH-001", type: "Kangoo", tech: "Carlos M.", fuel: "78%", nextService: "2026-03-15", vtv: "Vigente", insurance: "Vigente" },
@@ -21,6 +23,7 @@ const fleet = [
 export default function PlanningPage() {
   const { data: realOrders, isLoading: loadingOrders } = useWorkOrders();
   const { data: realTechnicians, isLoading: loadingTechs } = useTechnicianWorkload();
+  const updateOrder = useUpdateWorkOrder();
 
   // Safe default
   const technicians = realTechnicians || [];
@@ -70,17 +73,34 @@ export default function PlanningPage() {
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">{o.technician?.name || "Sin asignar"}</td>
                       <td className="py-3 px-4">
-                        <Badge className={`text-[10px] ${o.status === "en_progreso" ? "bg-primary/10 text-primary border-0" :
-                          o.status === "pendiente" ? "bg-secondary/10 text-secondary border-0" :
-                            o.status === "completada" ? "bg-primary/10 text-primary border-0" :
-                              o.status === "cancelada" ? "bg-destructive/10 text-destructive border-0" :
-                                "bg-muted text-muted-foreground border-0"
-                          }`}>{
-                            o.status === "en_progreso" ? "En curso" :
-                              o.status === "pendiente" ? "Pendiente" :
-                                o.status === "completada" ? "Completado" :
-                                  o.status === "cancelada" ? "Cancelado" : o.status
-                          }</Badge>
+                        <Select
+                          value={o.status || "pendiente"}
+                          onValueChange={(v) => {
+                            const promise = updateOrder.mutateAsync({ id: o.id, status: v as any });
+                            toast.promise(promise, {
+                              loading: 'Actualizando estado...',
+                              success: 'Estado de OT actualizado',
+                              error: 'Error al actualizar'
+                            });
+                          }}
+                        >
+                          <SelectTrigger className={`h-7 w-[130px] text-[11px] font-medium border-0 focus:ring-0
+                            ${o.status === "en_progreso" ? "bg-primary/10 text-primary" :
+                              o.status === "pendiente" ? "bg-secondary/10 text-secondary" :
+                                o.status === "completada" ? "bg-primary/20 text-primary" :
+                                  o.status === "cancelada" ? "bg-destructive/10 text-destructive" :
+                                    "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pendiente">Pendiente</SelectItem>
+                            <SelectItem value="en_progreso">En curso</SelectItem>
+                            <SelectItem value="completada">Completado</SelectItem>
+                            <SelectItem value="cancelada">Cancelado</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </td>
                     </tr>
                   ))}

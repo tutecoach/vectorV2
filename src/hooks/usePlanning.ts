@@ -46,6 +46,24 @@ export function useCreateWorkOrder() {
     });
 }
 
+export function useUpdateWorkOrder() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ id, ...updates }: TablesUpdate<"work_orders"> & { id: string }) => {
+            const { data, error } = await supabase
+                .from("work_orders")
+                .update(updates)
+                .eq("id", id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["work_orders"] }),
+    });
+}
+
 export function useTechnicians() {
     return useQuery({
         queryKey: ["technicians"],

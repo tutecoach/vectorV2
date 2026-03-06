@@ -43,7 +43,7 @@ const external = [
 ];
 
 export default function DashboardSidebar() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -70,7 +70,11 @@ export default function DashboardSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {modules.map((mod) => (
+              {modules.filter(mod => {
+                if (mod.path === "/dashboard/config" && user?.role !== "admin") return false;
+                if ((mod.path === "/dashboard/finance" || mod.path === "/dashboard/reports") && user?.role === "technician") return false;
+                return true;
+              }).map((mod) => (
                 <SidebarMenuItem key={mod.path}>
                   <SidebarMenuButton asChild>
                     <NavLink
