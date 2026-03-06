@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState } from "react";
 import {
   CalendarDays, ClipboardList, Users, Plus, MapPin, Clock, Brain,
   Route, Truck, Wrench, Shield, Fuel, Navigation,
@@ -9,6 +10,7 @@ import {
 
 import { useWorkOrders, useTechnicianWorkload, useUpdateWorkOrder } from "@/hooks/usePlanning";
 import NewWorkOrderDialog from "@/components/planning/NewWorkOrderDialog";
+import EditWorkOrderDialog from "@/components/planning/EditWorkOrderDialog";
 import { format } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -24,6 +26,8 @@ export default function PlanningPage() {
   const { data: realOrders, isLoading: loadingOrders } = useWorkOrders();
   const { data: realTechnicians, isLoading: loadingTechs } = useTechnicianWorkload();
   const updateOrder = useUpdateWorkOrder();
+
+  const [editingOrder, setEditingOrder] = useState<any>(null);
 
   // Safe default
   const technicians = realTechnicians || [];
@@ -41,6 +45,12 @@ export default function PlanningPage() {
           </TabsList>
           <NewWorkOrderDialog />
         </div>
+
+        <EditWorkOrderDialog
+          open={!!editingOrder}
+          onClose={() => setEditingOrder(null)}
+          workOrder={editingOrder}
+        />
 
         {/* OT Table */}
         <TabsContent value="orders">
@@ -63,7 +73,11 @@ export default function PlanningPage() {
                   ) : (!realOrders || realOrders.length === 0) ? (
                     <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No hay órdenes de trabajo registradas.</td></tr>
                   ) : realOrders.map((o) => (
-                    <tr key={o.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer">
+                    <tr
+                      key={o.id}
+                      className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => setEditingOrder(o)}
+                    >
                       <td className="py-3 px-4 font-medium text-secondary">{o.id.split("-").pop() || o.id}</td>
                       <td className="py-3 px-4 text-foreground">{o.client?.name || "Sin cliente"}</td>
                       <td className="py-3 px-4 text-muted-foreground text-xs hidden md:table-cell">{o.site?.name || "Sin sede"}</td>
@@ -72,7 +86,7 @@ export default function PlanningPage() {
                         {o.scheduled_date ? format(new Date(o.scheduled_date), "dd/MM/yyyy") : "Sin fecha"}
                       </td>
                       <td className="py-3 px-4 text-muted-foreground">{o.technician?.name || "Sin asignar"}</td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                         <Select
                           value={o.status || "pendiente"}
                           onValueChange={(v) => {
